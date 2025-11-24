@@ -1,23 +1,17 @@
 import type { Request, Response, NextFunction } from 'express';
-import { db } from '../services/urlService.js';
+import { UrlModel } from '../models/urlModel.js';
 
-export const trackClick = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
+export const trackClick = async (req: Request, _res: Response, next: NextFunction) => {
   const { code } = req.params;
-
   if (code) {
     try {
-      await db('urls')
-        .where('short_code', code)
-        .increment('clicks', 1)
-        .update({ updated_at: db.fn.now() });
+      await UrlModel.updateOne(
+        { short_code: code },
+        { $inc: { clicks: 1 }, $set: { updated_at: new Date() } }
+      );
     } catch (error) {
       console.error('Error incrementando click:', error);
     }
   }
-
   next();
 };

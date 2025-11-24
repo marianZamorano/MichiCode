@@ -8,18 +8,18 @@ export const shorten = async (req: Request, res: Response) => {
     if (!originalUrl) return res.status(400).json({ message: 'URL requerida' });
 
     const url = await shortenUrl(originalUrl.trim());
-    res.json(url);
+    return res.status(201).json(url);
   } catch (error: any) {
-    res.status(500).json({ message: error.message });
+    return res.status(400).json({ message: error.message || 'Error al acortar' });
   }
 };
 
 export const getAll = async (_: Request, res: Response) => {
   try {
     const urls = await getAllUrls();
-    res.json(urls);
+    return res.json(urls);
   } catch (error: any) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message || 'Error listando' });
   }
 };
 
@@ -32,7 +32,7 @@ export const redirect = async (req: Request, res: Response) => {
 
     return res.redirect(301, url.original_url);
   } catch (error: any) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message || 'Error redirigiendo' });
   }
 };
 
@@ -61,8 +61,8 @@ export const generateQR = async (req: Request, res: Response) => {
       res.set('Content-Type', 'image/png');
     }
 
-    res.send(qrBuffer);
-  } catch (error: any) {
-    res.status(500).json({ message: 'Error generando QR' });
+    return res.send(qrBuffer);
+  } catch (_error: any) {
+    return res.status(500).json({ message: 'Error generando QR' });
   }
 };
