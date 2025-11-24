@@ -8,7 +8,7 @@ interface UseFetchResult<T> {
   refetch: () => void;
 }
 
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = process.env.REACT_APP_API_BASE_URL;
 
 /**
  * Hook personalizado para hacer peticiones GET con axios
