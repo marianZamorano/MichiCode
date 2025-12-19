@@ -5,7 +5,7 @@ export const saveQr = async (req: Request, res: Response) => {
   try {
     const { content } = req.body;
     if (!content) {
-      return res
+      return rep
         .status(400)
         .json({ message: "Contenido (content) es requerido" });
     }
