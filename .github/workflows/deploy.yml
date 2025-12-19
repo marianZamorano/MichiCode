@@ -100,6 +100,20 @@ jobs:
       - name: Despliegue y Limpieza
         run: |
           ssh -i ~/.ssh/id_rsa ec2-user@${{ env.EC2_HOST }} << 'EOF'
+            echo "Esperando a que Docker se inicie..."
+            TIMEOUT=300
+            ELAPSED=0
+            while ! docker info > /dev/null 2>&1; do
+              if [ $ELAPSED -ge $TIMEOUT ]; then
+                echo "Error: Docker no se inició después de $TIMEOUT segundos."
+                exit 1
+              fi
+              echo "Docker aún no está listo... esperando 10s ($ELAPSED/$TIMEOUT)"
+              sleep 10
+              ELAPSED=$((ELAPSED+10))
+            done
+            echo "Docker está listo!"
+
             cd ${{ env.REMOTE_DIR }}
             
             # Crear .env dinámico con secretos

@@ -70,23 +70,22 @@ resource "aws_instance" "michicode_server" {
   user_data = <<-EOF
               #!/bin/bash
               # Actualizar el sistema
-              apt-get update -y
-              apt-get upgrade -y
-
+              yum update -y
+              
               # Instalar Docker
-              apt-get install -y docker.io
+              yum install -y docker
               systemctl start docker
               systemctl enable docker
-
-              # Agregar el usuario ubuntu al grupo docker
-              usermod -aG docker ubuntu
-
+              
+              # Agregar el usuario ec2-user al grupo docker
+              usermod -aG docker ec2-user
+              
               # Instalar Docker Compose
               curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
               chmod +x /usr/local/bin/docker-compose
               ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
 
-              echo "EC2 Instance initialized successfully" > /home/ubuntu/init-complete.txt
+              echo "EC2 Instance initialized successfully" > /home/ec2-user/init-complete.txt
               EOF
 
   tags = {
