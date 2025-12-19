@@ -1,0 +1,116 @@
+name: CI/CD MichiCode - Despliegue y Observabilidad
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  DOCKER_USER: ${{ secrets.DOCKER_HUB_USERNAME }}
+  DOCKER_IMAGE_BACKEND: ${{ secrets.DOCKER_HUB_USERNAME }}/michicode-backend
+  DOCKER_IMAGE_FRONTEND: ${{ secrets.DOCKER_HUB_USERNAME }}/michicode-frontend
+  EC2_HOST: ${{ secrets.EC2_HOST_IP }}
+  EC2_USER: ubuntu
+  REMOTE_DIR: /home/ubuntu/michicode-app
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Código Fuente
+        uses: actions/checkout@v4
+
+      - name: Login a Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Build & Push Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ env.DOCKER_IMAGE_BACKEND }}:latest
+
+      - name: Build & Push Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          push: true
+          tags: ${{ env.DOCKER_IMAGE_FRONTEND }}:latest
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-push
+    steps:
+      - name: Checkout repo para copiar archivos
+        uses: actions/checkout@v4
+
+      - name: Subir archivos de configuración a EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.EC2_HOST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "docker-compose.prod.yml,prometheus.yml,loki-config.yml,promtail-config.yml"
+          target: "${{ env.REMOTE_DIR }}"
+
+      - name: Ejecutar Despliegue Automático en EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ env.EC2_HOST }}
+          username: ${{ env.EC2_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ${{ env.REMOTE_DIR }}
+
+            # 1. Crear archivo de entorno para producción
+            echo "Inyectando secretos..."
+            cat << EOF > .env.prod
+            DOCKER_USER=${{ env.DOCKER_USER }}
+            EC2_HOST_IP=${{ env.EC2_HOST }}
+            DB_USER=${{ secrets.MONGO_INITDB_ROOT_USERNAME }}
+            DB_PASSWORD=${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}
+            MONGO_INITDB_ROOT_USERNAME=${{ secrets.MONGO_INITDB_ROOT_USERNAME }}
+            MONGO_INITDB_ROOT_PASSWORD=${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}
+            MONGO_INITDB_DATABASE=${{ secrets.MONGO_INITDB_DATABASE }}
+            EOF
+
+            # 2. Limpieza y Actualización (Elimina la necesidad de comandos manuales)
+            echo "Deteniendo stack anterior y limpiando imágenes huérfanas..."
+            docker-compose -f docker-compose.prod.yml down --remove-orphans
+            docker image prune -f
+
+            # 3. Pull y Levantar
+            echo "Descargando nuevas versiones y arrancando..."
+            docker-compose -f docker-compose.prod.yml --env-file .env.prod pull
+            docker-compose -f docker-compose.prod.yml --env-file .env.prod up -d
+
+            echo "✔ Estado de los contenedores:"
+            docker ps
+
+      - name: Notificar a Discord
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            COLOR=65280
+            TITLE="✅ Despliegue Exitoso"
+          else
+            COLOR=16711680
+            TITLE="❌ Despliegue Fallido"
+          fi
+          
+          curl -H "Content-Type: application/json" \
+          -d "{
+            \"embeds\": [{
+              \"title\": \"$TITLE\",
+              \"description\": \"El pipeline de MichiCode ha finalizado.\",
+              \"color\": $COLOR,
+              \"fields\": [
+                {\"name\": \"Repositorio\", \"value\": \"${{ github.repository }}\", \"inline\": true},
+                {\"name\": \"App URL\", \"value\": \"http://${{ env.EC2_HOST }}\", \"inline\": true}
+              ]
+            }]
+          }" \
+          ${{ secrets.DISCORD_WEBHOOK }}
