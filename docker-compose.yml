@@ -13,10 +13,9 @@ services:
       MONGO_INITDB_DATABASE: michicode
     volumes:
       - mongo-data:/data/db
+
   backend:
-    build:
-      context: ./backend 
-      dockerfile: Dockerfile
+    build: ./backend
     container_name: michicode-backend
     restart: always
     ports:
@@ -31,9 +30,8 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
       args:
-        REACT_APP_API_BASE_URL: http://localhost:5000 
+        REACT_APP_API_BASE_URL: http://localhost/api 
     container_name: michicode-frontend
     restart: always
     ports:
@@ -41,5 +39,31 @@ services:
     depends_on:
       - backend
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    ports:
+      - "9100:9100"
+
 volumes:
   mongo-data:
+  grafana-data:

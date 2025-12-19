@@ -1,0 +1,2 @@
+FROM loki/loki:latest
+WORKDIR /opt/loki
