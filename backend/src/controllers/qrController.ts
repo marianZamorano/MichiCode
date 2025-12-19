@@ -5,13 +5,15 @@ export const saveQr = async (req: Request, res: Response) => {
   try {
     const { content } = req.body;
     if (!content) {
-      return rep
+      throw new Error("Error prueba");
+      return res
         .status(400)
         .json({ message: "Contenido (content) es requerido" });
     }
     const qrRecord = await saveQrHistory(content);
     return res.status(201).json(qrRecord);
   } catch (error: any) {
+    console.error(error.message);
     return res
       .status(400)
       .json({ message: error.message || "Error al guardar el QR" });
