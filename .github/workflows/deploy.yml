@@ -98,34 +98,26 @@ jobs:
 
       - name: Despliegue y Limpieza
         run: |
-          ssh -i ~/.ssh/id_rsa ec2-user@${{ env.EC2_HOST }} << 'EOF'
+          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ env.EC2_HOST }} << 'EOF'
             cd ${{ env.REMOTE_DIR }}
             
             # Crear .env dinámico con secretos
-            cat << ENVEOF > .env.prod
+            cat << ENVEOF > .env
             MONGO_INITDB_ROOT_USERNAME=${{ secrets.MONGO_INITDB_ROOT_USERNAME }}
             MONGO_INITDB_ROOT_PASSWORD=${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}
-            EC2_HOST_DNS=${{ secrets.EC2_HOST_DNS }}
+            EC2_HOST_DNS=${{ env.EC2_DNS }}
+            DOCKER_USER=${{ env.DOCKER_USER }}
             ENVEOF
 
-            # Limpieza agresiva de disco
-            docker system prune -a -f 
-            
-            # Despliegue con tus comandos manuales + Monitoreo
-            docker stop frontend backend michicode-mongo || true
-            docker rm frontend backend michicode-mongo || true
-            docker network create michicode-net || true
+            # Bajar las imágenes nuevas (Pull)
+            docker-compose -f docker-compose.prod.yml pull
 
-            docker run -d --name michicode-mongo --network michicode-net -p 27017:27017 \
-              -e MONGO_INITDB_ROOT_USERNAME=${{ secrets.MONGO_INITDB_ROOT_USERNAME }} \
-              -e MONGO_INITDB_ROOT_PASSWORD=${{ secrets.MONGO_INITDB_ROOT_PASSWORD }} mongo:6
+            # Reiniciar todo con los cambios (Up -d)
+            # Docker Compose detecta los cambios y solo recrea lo necesario
+            docker-compose -f docker-compose.prod.yml up -d --remove-orphans
 
-            docker run -d --name backend --network michicode-net -p 5000:5000 \
-              -e MONGODB_URI="mongodb://${{ secrets.MONGO_INITDB_ROOT_USERNAME }}:${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}@michicode-mongo:27017/michicode" \
-              ${{ env.DOCKER_USER }}/michicode-backend:latest
-
-            # Levantar el resto (Grafana, Prometheus) con Compose
-            docker-compose -f docker-compose.prod.yml up -d prometheus grafana node-exporter
+            # Limpieza suave (solo imágenes viejas sin uso)
+            docker image prune -f
           EOF
 
       - name: Notificar Discord

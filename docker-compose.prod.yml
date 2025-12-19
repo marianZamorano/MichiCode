@@ -1,39 +1,50 @@
 version: '3.8'
 
 services:
-  mongo:
+  # Base de Datos
+  michicode-mongo:
     image: mongo:6
     container_name: michicode-mongo
     restart: always
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
-      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
     volumes:
       - mongo-data:/data/db
-
-  backend:
-    image: ${DOCKER_USER}/michicode-backend:latest 
-    container_name: michicode-backend
-    restart: always
     ports:
-      - "5000:5000"
+      - "27017:27017"
+    networks:
+      - michicode-net
+
+  # Backend
+  backend:
+    image: ${DOCKER_USER}/michicode-backend:latest
+    container_name: backend
+    restart: always
     environment:
       PORT: 5000
-      MONGODB_URI: mongodb://${DB_USER}:${DB_PASSWORD}@mongo:27017/michicode?authSource=admin
+      MONGODB_URI: "mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@michicode-mongo:27017/michicode?authSource=admin"
       BASE_URL: http://${EC2_HOST_DNS}:5000
+    ports:
+      - "5000:5000"
     depends_on:
-      - mongo
+      - michicode-mongo
+    networks:
+      - michicode-net
 
+  # Frontend
   frontend:
-    image: ${DOCKER_USER}/michicode-frontend:latest 
-    container_name: michicode-frontend
+    image: ${DOCKER_USER}/michicode-frontend:latest
+    container_name: frontend
     restart: always
     ports:
       - "80:80"
     depends_on:
       - backend
+    networks:
+      - michicode-net
 
+  # Monitoreo
   prometheus:
     image: prom/prometheus:latest
     container_name: michicode-prometheus
@@ -42,18 +53,19 @@ services:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
+    networks:
+      - michicode-net
 
   grafana:
     image: grafana/grafana-oss:latest
     container_name: michicode-grafana
     restart: always
     ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - "3001:3000"
     volumes:
-      - grafana-data:/var/lib/grafana
+      - grafana-storage:/var/lib/grafana
+    networks:
+      - michicode-net
 
   node-exporter:
     image: prom/node-exporter:latest
@@ -61,26 +73,36 @@ services:
     restart: always
     ports:
       - "9100:9100"
+    networks:
+      - michicode-net
 
   loki:
-    image: grafana/loki:latest
+    image: grafana/loki:2.9.0
     container_name: michicode-loki
     restart: always
     ports:
       - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
     volumes:
       - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml
-    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - michicode-net
 
   promtail:
-    image: grafana/promtail:latest
+    image: grafana/promtail:2.9.0
     container_name: michicode-promtail
     restart: always
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/log:/var/log
       - ./monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml
     command: -config.file=/etc/promtail/config.yml
+    networks:
+      - michicode-net
+
+networks:
+  michicode-net:
+    driver: bridge
 
 volumes:
   mongo-data:
-  grafana-data:
+  grafana-storage:
