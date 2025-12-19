@@ -98,7 +98,7 @@ jobs:
 
       - name: Despliegue y Limpieza
         run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.EC2_USER }}@${{ env.EC2_HOST }} << 'EOF'
+          ssh -i ~/.ssh/id_rsa ec2-user@${{ env.EC2_HOST }} << 'EOF'
             cd ${{ env.REMOTE_DIR }}
             
             # Crear .env dinámico con secretos
